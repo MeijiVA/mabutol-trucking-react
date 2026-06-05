@@ -1,11 +1,30 @@
-import { useState } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
+import { compliance as complianceApi, drivers as driversApi } from "../../services/api";
+import { useAuth } from "../../context/AuthContext";
 import "./compliance.css";
 
 export default function Compliance() {
   const navigate = useNavigate();
+  const { user } = useAuth();
   const [reportsSubmenuHidden, setReportsSubmenuHidden] = useState(true);
   const [settingsSubmenuHidden, setSettingsSubmenuHidden] = useState(true);
+
+  // API state
+  const [complianceData, setComplianceData] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [driverId, setDriverId] = useState(null);
+
+  const fetchCompliance = useCallback(() => {
+    setLoading(true);
+    const params = driverId ? { driver_id: driverId } : {};
+    complianceApi.list(params)
+      .then(res => setComplianceData(res.data || []))
+      .catch(console.error)
+      .finally(() => setLoading(false));
+  }, [driverId]);
+
+  useEffect(() => { fetchCompliance(); }, [fetchCompliance]);
 
   return (
     <div className="dashboard">
@@ -183,25 +202,25 @@ export default function Compliance() {
           <div className="stats">
             <div className="stat-card">
               <h4>Fully Compliant</h4>
-              <h2>98</h2>
+              <h2>{loading ? "—" : complianceData.filter(c => c.status === "compliant").length}</h2>
               <p className="green">All requirements complete</p>
             </div>
-            
+
             <div className="stat-card">
               <h4>Expiring Soon</h4>
-              <h2>14</h2>
+              <h2>{loading ? "—" : complianceData.filter(c => c.status === "expiring_soon").length}</h2>
               <p className="yellow">Renewal required</p>
             </div>
-            
+
             <div className="stat-card">
               <h4>Expired</h4>
-              <h2>6</h2>
+              <h2>{loading ? "—" : complianceData.filter(c => c.status === "expired").length}</h2>
               <p className="red">Immediate action needed</p>
             </div>
-            
+
             <div className="stat-card">
               <h4>Pending Review</h4>
-              <h2>9</h2>
+              <h2>{loading ? "—" : complianceData.filter(c => c.status === "pending").length}</h2>
               <p className="blue">Awaiting approval</p>
             </div>
           </div>
@@ -216,47 +235,39 @@ export default function Compliance() {
               />
             </div>
 
-            <table className="compliance-table">
-              <thead>
-                <tr>
-                  <th>Driver</th>
-                  <th>License</th>
-                  <th>Medical</th>
-                  <th>NBI</th>
-                  <th>Status</th>
-                  <th>Updated</th>
-                </tr>
-              </thead>
+            {loading ? (
+              <div style={{ padding: "40px", textAlign: "center", color: "#94a3b8" }}>Loading compliance data…</div>
+            ) : (
+              <table className="compliance-table">
+                <thead>
+                  <tr>
+                    <th>Driver</th>
+                    <th>License</th>
+                    <th>Medical</th>
+                    <th>NBI</th>
+                    <th>Status</th>
+                    <th>Updated</th>
+                  </tr>
+                </thead>
 
-              <tbody>
-                <tr>
-                  <td>Jose Dela Cruz</td>
-                  <td><span className="badge valid">Valid</span></td>
-                  <td><span className="badge valid">Valid</span></td>
-                  <td><span className="badge valid">Valid</span></td>
-                  <td><span className="status compliant">Compliant</span></td>
-                  <td>Oct 12, 2023</td>
-                </tr>
-
-                <tr>
-                  <td>Ricardo Bautista</td>
-                  <td><span className="badge expired">Expired</span></td>
-                  <td><span className="badge valid">Valid</span></td>
-                  <td><span className="badge valid">Valid</span></td>
-                  <td><span className="status expired-status">Non-Compliant</span></td>
-                  <td>Oct 10, 2023</td>
-                </tr>
-
-                <tr>
-                  <td>Manuel Pascual</td>
-                  <td><span className="badge valid">Valid</span></td>
-                  <td><span className="badge review">Under Review</span></td>
-                  <td><span className="badge valid">Valid</span></td>
-                  <td><span className="status review-status">Pending Review</span></td>
-                  <td>Oct 15, 2023</td>
-                </tr>
-              </tbody>
-            </table>
+                <tbody>
+                  {complianceData.length === 0 ? (
+                    <tr><td colSpan="6" style={{ textAlign: "center", padding: "32px", color: "#64748b" }}>No compliance records found.</td></tr>
+                  ) : (
+                    complianceData.map((record) => (
+                      <tr key={record.id}>
+                        <td>{record.driver_name || "—"}</td>
+                        <td><span className={`badge ${record.license_status === "valid" ? "valid" : record.license_status === "expired" ? "expired" : "review"}`}>{record.license_status?.toUpperCase() || "—"}</span></td>
+                        <td><span className={`badge ${record.medical_status === "valid" ? "valid" : record.medical_status === "expired" ? "expired" : "review"}`}>{record.medical_status?.toUpperCase() || "—"}</span></td>
+                        <td><span className={`badge ${record.nbi_status === "valid" ? "valid" : record.nbi_status === "expired" ? "expired" : "review"}`}>{record.nbi_status?.toUpperCase() || "—"}</span></td>
+                        <td><span className={`status ${record.status === "compliant" ? "compliant" : record.status === "expired" ? "expired-status" : "review-status"}`}>{record.status?.toUpperCase().replace(/_/g, "-")}</span></td>
+                        <td>{record.updated_at ? new Date(record.updated_at).toLocaleDateString("en-PH") : "—"}</td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            )}
           </div>
         </section>
       </main>
