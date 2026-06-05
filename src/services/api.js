@@ -1,6 +1,6 @@
 // ─── TANAW API Service Layer ──────────────────────────────────────────────────
 // Base URL — change to your deployed API URL in production
-const BASE_URL = import.meta.env.VITE_API_URL || "postgresql://neondb_owner:npg_QJWl1hGKOXL3@ep-orange-frog-aqnj0jjo-pooler.c-8.us-east-1.aws.neon.tech/neondb?sslmode=require&channel_binding=require";
+const BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:5000";
 
 // ── Token helpers ─────────────────────────────────────────────────────────────
 export const getToken = () => localStorage.getItem("tanaw_token");
