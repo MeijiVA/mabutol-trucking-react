@@ -9,10 +9,10 @@ dotenv.config();
 
 const app = express();
 const PORT = 5000;
-const JWT_SECRET = process.env.JWT_SECRET || "your-secret-key-change-this";
+const JWT_SECRET = process.env.JWT_SECRET || "your-secret-key-change-this-in-production";
 
 const pool = new pg.Pool({
-  connectionString: process.env.VITE_API_URL || "postgresql://neondb_owner:npg_QJWl1hGKOXL3@ep-orange-frog-aqnj0jjo-pooler.c-8.us-east-1.aws.neon.tech/neondb?sslmode=require&channel_binding=require",
+  connectionString: process.env.DATABASE_URL || "postgresql://neondb_owner:npg_QJWl1hGKOXL3@ep-orange-frog-aqnj0jjo-pooler.c-8.us-east-1.aws.neon.tech/neondb?sslmode=require&channel_binding=require",
 });
 
 app.use(cors());
