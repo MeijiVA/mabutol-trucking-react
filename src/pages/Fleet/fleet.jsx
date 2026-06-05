@@ -1,7 +1,9 @@
-﻿// fleet.jsx
-import { useState } from "react";
+// fleet.jsx
+import { useState, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import MainLayout from "../../layouts/mainLayout";
+import { vehicles as vehiclesApi, drivers as driversApi } from "../../services/api";
+import { useAuth } from "../../context/AuthContext";
 import "./fleet.css";
 
 export default function Fleet() {
@@ -10,6 +12,34 @@ export default function Fleet() {
   const [driverTab, setDriverTab] = useState("details");
   const [maintenanceView, setMaintenanceView] = useState("list");
   const navigate = useNavigate();
+  const { user } = useAuth();
+
+  // API state
+  const [vehicles, setVehicles] = useState([]);
+  const [drivers, setDrivers] = useState([]);
+  const [vehiclesLoading, setVehiclesLoading] = useState(true);
+  const [driversLoading, setDriversLoading] = useState(true);
+
+  const fetchVehicles = useCallback(() => {
+    setVehiclesLoading(true);
+    vehiclesApi.list()
+      .then(res => setVehicles(res.data || []))
+      .catch(console.error)
+      .finally(() => setVehiclesLoading(false));
+  }, []);
+
+  const fetchDrivers = useCallback(() => {
+    setDriversLoading(true);
+    driversApi.list()
+      .then(res => setDrivers(res.data || []))
+      .catch(console.error)
+      .finally(() => setDriversLoading(false));
+  }, []);
+
+  useEffect(() => {
+    fetchVehicles();
+    fetchDrivers();
+  }, [fetchVehicles, fetchDrivers]);
 
   // Multi-step Modal States
   const [isDriverModalOpen, setIsDriverModalOpen] = useState(false);
@@ -21,13 +51,13 @@ export default function Fleet() {
 
   // Form Field States
   const [driverForm, setDriverForm] = useState({
-    fullName: "", contactNumber: "", dateHired: "", assignVehicle: "", 
-    emergencyContact: "", licenseNumber: "", licenseExpiry: "", 
+    full_name: "", contact_number: "", date_hired: "", vehicle_id: "",
+    emergency_contact: "", license_number: "", license_expiry: "",
     email: "", password: "", confirmPassword: ""
   });
-  
+
   const [vehicleForm, setVehicleForm] = useState({
-    plateNumber: "", modelYear: "", model: "", type: "", capacity: "", cargoCompatibility: ['general', 'fragile'], assignedDriver: ""
+    plate_number: "", model_year: "", model: "", type: "", capacity: "", cargo_compatibility: [], driver_id: ""
   });
 
   // Handler functions for cleaning state resets on open
@@ -44,16 +74,41 @@ export default function Fleet() {
   const handleDriverInputChange = (e, field) => {
     setDriverForm({ ...driverForm, [field]: e.target.value });
   };
-const handleCargoToggle = (id) => {
-    const currentCargo = vehicleForm.cargoCompatibility || [];
+
+  const handleCargoToggle = (id) => {
+    const currentCargo = vehicleForm.cargo_compatibility || [];
     const updatedCargo = currentCargo.includes(id)
       ? currentCargo.filter(item => item !== id)
       : [...currentCargo, id];
+    setVehicleForm({ ...vehicleForm, cargo_compatibility: updatedCargo });
+  };
 
-    setVehicleForm({ ...vehicleForm, cargoCompatibility: updatedCargo });
-  }; 
   const handleVehicleInputChange = (e, field) => {
     setVehicleForm({ ...vehicleForm, [field]: e.target.value });
+  };
+
+  const handleRegisterDriver = async () => {
+    try {
+      await driversApi.create(driverForm);
+      setIsDriverModalOpen(false);
+      setDriverStep(1);
+      setDriverForm({ full_name: "", contact_number: "", date_hired: "", vehicle_id: "", emergency_contact: "", license_number: "", license_expiry: "", email: "", password: "", confirmPassword: "" });
+      fetchDrivers();
+    } catch (e) {
+      alert(e.message);
+    }
+  };
+
+  const handleAddVehicle = async () => {
+    try {
+      await vehiclesApi.create(vehicleForm);
+      setIsVehicleModalOpen(false);
+      setVehicleStep(1);
+      setVehicleForm({ plate_number: "", model_year: "", model: "", type: "", capacity: "", cargo_compatibility: [], driver_id: "" });
+      fetchVehicles();
+    } catch (e) {
+      alert(e.message);
+    }
   };
 
   return (
@@ -124,23 +179,23 @@ const handleCargoToggle = (id) => {
               <h4>TOTAL VEHICLES</h4>
               <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#64748B" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline></svg>
             </div>
-            <h2>36</h2>
-            <p className="growth-indicator positive"><span className="arrow">↗</span> <strong>+2%</strong> vs last month</p>
+            <h2>{vehiclesLoading ? "—" : vehicles.length}</h2>
+            <p className="growth-indicator positive"><span className="arrow">↗</span> Active fleet</p>
           </div>
           <div className="metric-card border-green">
             <div className="metric-header">
               <h4>AVAILABLE</h4>
               <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#10B981" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>
             </div>
-            <h2>18</h2>
-            <p className="growth-indicator target">50% of total fleet</p>
+            <h2>{vehiclesLoading ? "—" : vehicles.filter(v => v.status === "available").length}</h2>
+            <p className="growth-indicator target">Ready for dispatch</p>
           </div>
           <div className="metric-card border-red">
             <div className="metric-header">
               <h4>IN MAINTENANCE</h4>
               <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#EF4444" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"></path><polyline points="14 2 14 8 20 8"></polyline></svg>
             </div>
-            <h2>4</h2>
+            <h2>{vehiclesLoading ? "—" : vehicles.filter(v => v.status === "maintenance").length}</h2>
             <p className="growth-indicator ">Currently under maintenance</p>
           </div>
           <div className="metric-card border-blue-accent">
@@ -148,7 +203,7 @@ const handleCargoToggle = (id) => {
               <h4>IN TRANSIT</h4>
               <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#3B82F6" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="1" y="3" width="15" height="13" rx="2"></rect><path d="M16 8h4l3 3v5h-7V8z"></path><circle cx="5.5" cy="18.5" r="2.5"></circle><circle cx="18.5" cy="18.5" r="2.5"></circle></svg>
             </div>
-            <h2>14</h2>
+            <h2>{vehiclesLoading ? "—" : vehicles.filter(v => v.status === "in_transit").length}</h2>
             <p className="growth-indicator transit">Currently on shipment</p>
           </div>
         </div>
@@ -187,28 +242,40 @@ const handleCargoToggle = (id) => {
                 <input type="text" className="inner-search" placeholder="Search by plate, vehicle type..." />
               </div>
             </div>
-            <table className="premium-table">
-              <thead>
-                <tr>
-                  <th>VEHICLE</th>
-                  <th>TYPE & CAPACITY</th>
-                  <th>CARGO COMPATIBILITY</th>
-                  <th>ASSIGNED DRIVER</th>
-                  <th>STATUS</th>
-                  <th>ACTIONS</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr>
-                  <td><strong>XJ-772-L</strong><br/><span className="subtext">2019 Isuzu Giga</span></td>
-                  <td>Heavy Freight, 15,000 kg</td>
-                  <td><span className="badge">GENERAL</span> <span className="badge">BULK</span></td>
-                  <td>Ramon Cruz</td>
-                  <td><span className="status-pill status-transit">● IN TRANSIT</span></td>
-                  <td><button className="action-dot-btn">⋮</button></td>
-                </tr>
-              </tbody>
-            </table>
+            {vehiclesLoading ? (
+              <div style={{ padding: "40px", textAlign: "center", color: "#94a3b8" }}>Loading vehicles…</div>
+            ) : (
+              <table className="premium-table">
+                <thead>
+                  <tr>
+                    <th>VEHICLE</th>
+                    <th>TYPE & CAPACITY</th>
+                    <th>CARGO COMPATIBILITY</th>
+                    <th>ASSIGNED DRIVER</th>
+                    <th>STATUS</th>
+                    <th>ACTIONS</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {vehicles.length === 0 ? (
+                    <tr><td colSpan="6" style={{ textAlign: "center", padding: "32px", color: "#64748b" }}>No vehicles registered.</td></tr>
+                  ) : (
+                    vehicles.map((vehicle) => (
+                      <tr key={vehicle.id}>
+                        <td><strong>{vehicle.plate_number}</strong><br/><span className="subtext">{vehicle.model_year} {vehicle.model}</span></td>
+                        <td>{vehicle.type}, {vehicle.capacity} kg</td>
+                        <td>
+                          {vehicle.cargo_compatibility?.map(c => <span key={c} className="badge">{c.toUpperCase()}</span>)}
+                        </td>
+                        <td>{vehicle.driver_name || "—"}</td>
+                        <td><span className={`status-pill status-${vehicle.status}`}>● {vehicle.status?.toUpperCase() || "IDLE"}</span></td>
+                        <td><button className="action-dot-btn">⋮</button></td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            )}
           </>
         ) : (
           <>
@@ -217,28 +284,38 @@ const handleCargoToggle = (id) => {
                 <input type="text" className="inner-search" placeholder="Search compliance by plate..." />
               </div>
             </div>
-            <table className="premium-table">
-              <thead>
-                <tr>
-                  <th>VEHICLE</th>
-                  <th>OR/CR REGISTRATION</th>
-                  <th>LTFRB PERMIT</th>
-                  <th>EMISSION TEST</th>
-                  <th>COMPLIANCE STATUS</th>
-                  <th>ACTIONS</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr>
-                  <td><strong>XJ-772-L</strong><br/><span className="subtext">2019 Isuzu Giga</span></td>
-                  <td><span className="doc-pill doc-success">Valid (Dec 15, 2026)</span></td>
-                  <td><span className="doc-pill doc-warning">Expiring Soon</span></td>
-                  <td><span className="doc-pill doc-success">Valid</span></td>
-                  <td><span className="status-pill status-active">● Verified</span></td>
-                  <td><button className="action-dot-btn">⋮</button></td>
-                </tr>
-              </tbody>
-            </table>
+            {vehiclesLoading ? (
+              <div style={{ padding: "40px", textAlign: "center", color: "#94a3b8" }}>Loading vehicles…</div>
+            ) : (
+              <table className="premium-table">
+                <thead>
+                  <tr>
+                    <th>VEHICLE</th>
+                    <th>OR/CR REGISTRATION</th>
+                    <th>LTFRB PERMIT</th>
+                    <th>EMISSION TEST</th>
+                    <th>COMPLIANCE STATUS</th>
+                    <th>ACTIONS</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {vehicles.length === 0 ? (
+                    <tr><td colSpan="6" style={{ textAlign: "center", padding: "32px", color: "#64748b" }}>No vehicles registered.</td></tr>
+                  ) : (
+                    vehicles.map((vehicle) => (
+                      <tr key={vehicle.id}>
+                        <td><strong>{vehicle.plate_number}</strong><br/><span className="subtext">{vehicle.model_year} {vehicle.model}</span></td>
+                        <td><span className="doc-pill doc-success">Valid</span></td>
+                        <td><span className="doc-pill doc-success">Valid</span></td>
+                        <td><span className="doc-pill doc-success">Valid</span></td>
+                        <td><span className="status-pill status-active">● Verified</span></td>
+                        <td><button className="action-dot-btn">⋮</button></td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            )}
           </>
         )}
 
@@ -269,49 +346,69 @@ const handleCargoToggle = (id) => {
         </div>
 
         {driverTab === "details" ? (
-          <table className="premium-table">
-            <thead>
-              <tr>
-                <th>DRIVER DETAILS</th>
-                <th>LICENSE INFORMATION</th>
-                <th>VEHICLE</th>
-                <th>CURRENT LOCATION</th>
-                <th>STATUS</th>
-                <th>COMPLIANCE</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr>
-                <td><strong>Jose Dela Cruz</strong><br/><span className="subtext">0917-123-4567</span></td>
-                <td>N01-22-34981<br/><span className="subtext text-success">Exp: Oct 2026</span></td>
-                <td>Isuzu Forward (ABC 123)</td>
-                <td>NLEX, km 42</td>
-                <td><span className="status-pill status-transit">ON ROUTE</span></td>
-                <td><span className="text-success">4/4 Verified</span></td>
-              </tr>
-            </tbody>
-          </table>
+          driversLoading ? (
+            <div style={{ padding: "40px", textAlign: "center", color: "#94a3b8" }}>Loading drivers…</div>
+          ) : (
+            <table className="premium-table">
+              <thead>
+                <tr>
+                  <th>DRIVER DETAILS</th>
+                  <th>LICENSE INFORMATION</th>
+                  <th>VEHICLE</th>
+                  <th>CURRENT LOCATION</th>
+                  <th>STATUS</th>
+                  <th>COMPLIANCE</th>
+                </tr>
+              </thead>
+              <tbody>
+                {drivers.length === 0 ? (
+                  <tr><td colSpan="6" style={{ textAlign: "center", padding: "32px", color: "#64748b" }}>No drivers registered.</td></tr>
+                ) : (
+                  drivers.map((driver) => (
+                    <tr key={driver.id}>
+                      <td><strong>{driver.full_name}</strong><br/><span className="subtext">{driver.contact_number || "—"}</span></td>
+                      <td>{driver.license_number || "—"}<br/><span className="subtext text-success">Exp: {driver.license_expiry ? new Date(driver.license_expiry).getFullYear() : "—"}</span></td>
+                      <td>{driver.vehicle_plate || "—"}</td>
+                      <td>—</td>
+                      <td><span className={`status-pill status-${driver.status}`}>{driver.status?.toUpperCase() || "IDLE"}</span></td>
+                      <td><span className="text-success">Complete</span></td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          )
         ) : (
-          <table className="premium-table">
-            <thead>
-              <tr>
-                <th>DRIVER DETAILS</th>
-                <th>DRIVERS LICENCE</th>
-                <th>MEDICAL CERTIFICATE</th>
-                <th>NBI CLEARANCE</th>
-                <th>OVERALL STATUS</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr>
-                <td><strong>Jose Dela Cruz</strong></td>
-                <td><span className="doc-pill doc-success">Valid</span></td>
-                <td><span className="doc-pill doc-success">Valid</span></td>
-                <td><span className="doc-pill doc-warning">Pending Renewal</span></td>
-                <td><span className="status-pill status-active">On Route</span></td>
-              </tr>
-            </tbody>
-          </table>
+          driversLoading ? (
+            <div style={{ padding: "40px", textAlign: "center", color: "#94a3b8" }}>Loading drivers…</div>
+          ) : (
+            <table className="premium-table">
+              <thead>
+                <tr>
+                  <th>DRIVER DETAILS</th>
+                  <th>DRIVERS LICENCE</th>
+                  <th>MEDICAL CERTIFICATE</th>
+                  <th>NBI CLEARANCE</th>
+                  <th>OVERALL STATUS</th>
+                </tr>
+              </thead>
+              <tbody>
+                {drivers.length === 0 ? (
+                  <tr><td colSpan="5" style={{ textAlign: "center", padding: "32px", color: "#64748b" }}>No drivers registered.</td></tr>
+                ) : (
+                  drivers.map((driver) => (
+                    <tr key={driver.id}>
+                      <td><strong>{driver.full_name}</strong></td>
+                      <td><span className="doc-pill doc-success">Valid</span></td>
+                      <td><span className="doc-pill doc-success">Valid</span></td>
+                      <td><span className="doc-pill doc-warning">Pending</span></td>
+                      <td><span className="status-pill status-active">{driver.status?.toUpperCase() || "IDLE"}</span></td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          )
         )}
 
         {/* ================= SECTION 3: MAINTENANCE SCHEDULE (RESTORED PANEL) ================= */}
@@ -464,7 +561,7 @@ const handleCargoToggle = (id) => {
                   {driverStep === 3 && "Registration Executed"}
                 </p>
               </div>
-              <button className="close-modal-btn" onClick={() => setIsDriverModalOpen(false)}>×</button>
+              <button className="close-modal-btn" onClick={() => { setIsDriverModalOpen(false); setDriverStep(1); }}>×</button>
             </div>
 
             {/* Steps Progress Metrics Indicator */}
@@ -492,36 +589,36 @@ const handleCargoToggle = (id) => {
                 <div className="form-grid">
                   <div className="form-group">
                     <label>FULL NAME *</label>
-                    <input type="text" placeholder="e.g. Juan dela Cruz" value={driverForm.fullName} onChange={(e) => handleDriverInputChange(e, 'fullName')} />
+                    <input type="text" placeholder="e.g. Juan dela Cruz" value={driverForm.full_name} onChange={(e) => handleDriverInputChange(e, 'full_name')} />
                   </div>
                   <div className="form-group">
                     <label>CONTACT NUMBER *</label>
-                    <input type="text" placeholder="09XX XXX XXXX" value={driverForm.contactNumber} onChange={(e) => handleDriverInputChange(e, 'contactNumber')} />
+                    <input type="text" placeholder="09XX XXX XXXX" value={driverForm.contact_number} onChange={(e) => handleDriverInputChange(e, 'contact_number')} />
                   </div>
                   <div className="form-group">
                     <label>DATE HIRED *</label>
-                    <input type="date" value={driverForm.dateHired} onChange={(e) => handleDriverInputChange(e, 'dateHired')} />
+                    <input type="date" value={driverForm.date_hired} onChange={(e) => handleDriverInputChange(e, 'date_hired')} />
                   </div>
                   <div className="form-group">
                     <label>ASSIGN VEHICLE</label>
-                    <select value={driverForm.assignVehicle} onChange={(e) => handleDriverInputChange(e, 'assignVehicle')}>
+                    <select value={driverForm.vehicle_id} onChange={(e) => handleDriverInputChange(e, 'vehicle_id')}>
                       <option value="">Select vehicle...</option>
-                      <option value="xj772l">Isuzu Giga (XJ-772-L)</option>
+                      {vehicles.map(v => <option key={v.id} value={v.id}>{v.plate_number} ({v.model})</option>)}
                     </select>
                   </div>
                   <div className="form-group full-width">
                     <label>EMERGENCY CONTACT NUMBER</label>
-                    <input type="text" placeholder="09XX XXX XXXX" value={driverForm.emergencyContact} onChange={(e) => handleDriverInputChange(e, 'emergencyContact')} />
+                    <input type="text" placeholder="09XX XXX XXXX" value={driverForm.emergency_contact} onChange={(e) => handleDriverInputChange(e, 'emergency_contact')} />
                   </div>
-                  
+
                   <div className="form-divider-title">License Information</div>
                   <div className="form-group">
-                    <label>LICENSE NUMBER <span className="auto-fill-hint">⚡ Auto-fill ready</span></label>
-                    <input type="text" placeholder="N01-23-45678" value={driverForm.licenseNumber} onChange={(e) => handleDriverInputChange(e, 'licenseNumber')} />
+                    <label>LICENSE NUMBER *</label>
+                    <input type="text" placeholder="N01-23-45678" value={driverForm.license_number} onChange={(e) => handleDriverInputChange(e, 'license_number')} />
                   </div>
                   <div className="form-group">
-                    <label>LICENSE EXPIRY <span className="auto-fill-hint">⚡ Auto-fill ready</span></label>
-                    <input type="date" value={driverForm.licenseExpiry} onChange={(e) => handleDriverInputChange(e, 'licenseExpiry')} />
+                    <label>LICENSE EXPIRY *</label>
+                    <input type="date" value={driverForm.license_expiry} onChange={(e) => handleDriverInputChange(e, 'license_expiry')} />
                   </div>
 
                   <div className="form-section-box">
@@ -606,7 +703,13 @@ const handleCargoToggle = (id) => {
       <div className="footer-right-buttons">
         <button
           className="btn-primary"
-          onClick={() => setDriverStep(2)}
+          onClick={() => {
+            if (!driverForm.full_name || !driverForm.contact_number || !driverForm.license_number) {
+              alert("Please fill in all required fields");
+              return;
+            }
+            setDriverStep(2);
+          }}
         >
           NEXT STEP →
         </button>
@@ -632,7 +735,10 @@ const handleCargoToggle = (id) => {
 
         <button
           className="btn-primary"
-          onClick={() => setDriverStep(3)}
+          onClick={() => {
+            handleRegisterDriver();
+            setDriverStep(3);
+          }}
         >
           Complete Registration ✓
         </button>
@@ -668,10 +774,9 @@ const handleCargoToggle = (id) => {
                 <p className="modal-subtitle">
                   {vehicleStep === 1 && "Vehicle Technical Specifications"}
                   {vehicleStep === 2 && "Compliance and Registration Logs"}
-                  {vehicleStep === 3 && "Registry Entry Added"}
                 </p>
               </div>
-              <button className="close-modal-btn" onClick={() => setIsVehicleModalOpen(false)}>×</button>
+              <button className="close-modal-btn" onClick={() => { setIsVehicleModalOpen(false); setVehicleStep(1); }}>×</button>
             </div>
 
             <div className="modal-steps-indicator">
@@ -691,11 +796,11 @@ const handleCargoToggle = (id) => {
                 <div className="form-grid">
                   <div className="form-group">
                     <label>PLATE NUMBER *</label>
-                    <input type="text" placeholder="e.g. ABC 1234" value={vehicleForm.plateNumber} onChange={(e) => handleVehicleInputChange(e, 'plateNumber')} />
+                    <input type="text" placeholder="e.g. ABC 1234" value={vehicleForm.plate_number} onChange={(e) => handleVehicleInputChange(e, 'plate_number')} />
                   </div>
                   <div className="form-group">
                     <label>MODEL YEAR *</label>
-                    <input type="text" placeholder="e.g. Isuzu Giga" value={vehicleForm.modelYear} onChange={(e) => handleVehicleInputChange(e, 'modelYear')} />
+                    <input type="text" placeholder="e.g. 2019" value={vehicleForm.model_year} onChange={(e) => handleVehicleInputChange(e, 'model_year')} />
                   </div>
                   <div className="form-group">
                     <label>MODEL *</label>
@@ -707,6 +812,7 @@ const handleCargoToggle = (id) => {
                       <option value="">Select type...</option>
                       <option value="heavy">Heavy Freight Truck (10w)</option>
                       <option value="medium">Medium Closed Van (6w)</option>
+                      <option value="light">Light Truck (4w)</option>
                     </select>
                   </div>
                   <div className="form-group">
@@ -726,7 +832,7 @@ const handleCargoToggle = (id) => {
                         { id: 'hazardous', label: 'Hazardous' },
                         { id: 'flatbed', label: 'Flatbed' }
                       ].map((option) => {
-                        const isSelected = vehicleForm.cargoCompatibility?.includes(option.id);
+                        const isSelected = vehicleForm.cargo_compatibility?.includes(option.id);
                         return (
                           <button
                             key={option.id}
@@ -735,14 +841,14 @@ const handleCargoToggle = (id) => {
                             onClick={() => handleCargoToggle(option.id)}
                           >
                             {isSelected && (
-                              <svg 
-                                className="checkmark-icon" 
-                                xmlns="http://www.w3.org/2000/svg" 
-                                viewBox="0 0 24 24" 
-                                fill="none" 
-                                stroke="currentColor" 
-                                strokeWidth="3" 
-                                strokeLinecap="round" 
+                              <svg
+                                className="checkmark-icon"
+                                xmlns="http://www.w3.org/2000/svg"
+                                viewBox="0 0 24 24"
+                                fill="none"
+                                stroke="currentColor"
+                                strokeWidth="3"
+                                strokeLinecap="round"
                                 strokeLinejoin="round"
                               >
                                 <polyline points="20 6 9 17 4 12"></polyline>
@@ -765,20 +871,20 @@ const handleCargoToggle = (id) => {
                   <div className="form-grid" style={{ marginBottom: "24px" }}>
                     <div className="form-group">
                       <label>OR NUMBER <span className="required">*</span></label>
-                      <input 
-                        type="text" 
-                        placeholder="Enter Official Receipt Number" 
-                        value={vehicleForm.orNumber || ""} 
-                        onChange={(e) => setVehicleForm({...vehicleForm, orNumber: e.target.value})}
+                      <input
+                        type="text"
+                        placeholder="Enter Official Receipt Number"
+                        value={vehicleForm.or_number || ""}
+                        onChange={(e) => setVehicleForm({...vehicleForm, or_number: e.target.value})}
                       />
                     </div>
                     <div className="form-group">
                       <label>CR NUMBER <span className="required">*</span></label>
-                      <input 
-                        type="text" 
-                        placeholder="Enter Certificate of Registration Number" 
-                        value={vehicleForm.crNumber || ""} 
-                        onChange={(e) => setVehicleForm({...vehicleForm, crNumber: e.target.value})}
+                      <input
+                        type="text"
+                        placeholder="Enter Certificate of Registration Number"
+                        value={vehicleForm.cr_number || ""}
+                        onChange={(e) => setVehicleForm({...vehicleForm, cr_number: e.target.value})}
                       />
                     </div>
                   </div>
@@ -845,7 +951,13 @@ const handleCargoToggle = (id) => {
       <div className="footer-right-buttons">
         <button
           className="btn-primary"
-          onClick={() => setVehicleStep(2)}
+          onClick={() => {
+            if (!vehicleForm.plate_number || !vehicleForm.model || !vehicleForm.type || !vehicleForm.capacity) {
+              alert("Please fill in all required fields");
+              return;
+            }
+            setVehicleStep(2);
+          }}
         >
           NEXT STEP →
         </button>
@@ -872,6 +984,7 @@ const handleCargoToggle = (id) => {
         <button
           className="btn-primary"
           onClick={() => {
+            handleAddVehicle();
             setShowVehicleSuccess(true);
           }}
         >
